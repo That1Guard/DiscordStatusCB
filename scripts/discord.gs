@@ -8,6 +8,18 @@ end
 
 global prevPlayerCount = -1
 
+public def OnPlayerConnect(playerid)
+    BotLog("Player " + GetPlayerNickname(playerid) + " join...")
+end
+
+public def OnPlayerChat(playerid, text)
+    BotLog("Chat: " + GetPlayerNickname(playerid) + text)
+end
+
+public def OnPlayerDisconnect(playerid, message)
+    BotLog("Player " + GetPlayerNickname(playerid) + " left...")
+end
+
 public def OnServerUpdate()
     j = 0
     for i=1; i<=MAX_PLAYERS; ++i
@@ -20,6 +32,13 @@ public def OnServerUpdate()
         SetList()
         prevPlayerCount = j
     end
+end
+
+def BotLog(data)
+    fs = WriteFile("bot_log.txt")
+    WriteLine(fs, data)
+    CloseFile(fs)
+    plugin_call(bot, "output_log", 0)
 end
 
 def SetList()

@@ -1,3 +1,4 @@
+use serenity::model::prelude::ChannelId;
 use serenity::model::prelude::Activity;
 use serenity::model::prelude::GuildId;
 use serenity::async_trait;
@@ -19,19 +20,28 @@ struct General;
 struct Handler;
 
 static mut status: String = String::new();
+static mut log_queue: Vec<String> = Vec::new();
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn cache_ready(&self, _ctx: Context, _guilds: Vec<GuildId>) {
         tokio::spawn(async move {
+            let mut chnl_id = std::fs::read_to_string("bot_log_channel.txt").unwrap_or(format!("0"));
+            chnl_id = format!("{}", chnl_id.trim());
+            let id = chnl_id.parse::<u64>().unwrap();
+            let chnl = ChannelId(id);
             loop {
                 unsafe {
-                    // if status != None {
-                        let st = &status;
-                        _ctx.set_activity(Activity::playing(&*st)).await;
-                    // }
+                    let st = &status;
+                    _ctx.set_activity(Activity::playing(&*st)).await;
+                    if id != 0 {
+                        for x in &log_queue {
+                            chnl.say(&_ctx.http, &*x).await;
+                        }
+                    }
+                    log_queue.clear();
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
             }
         });
     }
@@ -64,6 +74,14 @@ pub unsafe extern "cdecl" fn bot_test() {
 #[allow(non_snake_case)]
 pub unsafe extern "cdecl" fn bot_status() {
     status = std::fs::read_to_string("bot_status.txt").unwrap_or(format!(""));
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "cdecl" fn output_log() {
+    let mut st = std::fs::read_to_string("bot_log.txt").unwrap_or(format!(""));
+    st = st.replace("@", " ").replace("\\n", "\n");
+    log_queue.push(st);
 }
 
 #[no_mangle]
