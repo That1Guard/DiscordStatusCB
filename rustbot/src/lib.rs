@@ -1,3 +1,4 @@
+use serenity::model::prelude::RoleId;
 use serenity::model::prelude::ChannelId;
 use serenity::model::prelude::Activity;
 use serenity::model::prelude::GuildId;
@@ -14,17 +15,24 @@ use serenity::framework::standard::{
 };
 
 #[group]
-#[commands(list)]
+#[commands(list, kick)]
 struct General;
 
 struct Handler;
 
 static mut status: String = String::new();
 static mut log_queue: Vec<String> = Vec::new();
+static mut admin_role: u64 = 0;
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn cache_ready(&self, _ctx: Context, _guilds: Vec<GuildId>) {
+        let mut admin_id = std::fs::read_to_string("bot_admin_role.txt").unwrap_or(format!("0"));
+        admin_id = format!("{}", admin_id.trim());
+        let id = admin_id.parse::<u64>().unwrap();
+        unsafe {
+            admin_role = id;
+        }
         tokio::spawn(async move {
             let mut chnl_id = std::fs::read_to_string("bot_log_channel.txt").unwrap_or(format!("0"));
             chnl_id = format!("{}", chnl_id.trim());
@@ -115,6 +123,28 @@ async fn list(ctx: &Context, msg: &Message) -> CommandResult {
     let mut st = std::fs::read_to_string("bot_players.txt").unwrap_or(format!(""));
     st = st.replace("@", " ").replace("\\n", "\n");
     msg.reply(ctx, st).await?;
+
+    Ok(())
+}
+
+#[command]
+async fn kick(ctx: &Context, msg: &Message) -> CommandResult {
+    let role_id: RoleId;
+    unsafe {
+        role_id = RoleId(admin_role);
+    }
+    let guild = msg.guild_id.unwrap();
+    let hasrole = msg.author.has_role(ctx, guild, role_id).await.unwrap();
+    if hasrole {
+        let index = msg.content.find(" ");
+        let mut msg2 = msg.content.clone().to_string();
+        msg2 = msg2.replace("~kick ", "");
+        std::fs::write("bot_game_cmd.txt", format!("kick {}", msg2)).unwrap();
+        msg.reply(ctx, "Done.").await?;
+    }
+    else {
+        msg.reply(ctx, "No permission.").await?;
+    }
 
     Ok(())
 }

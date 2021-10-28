@@ -32,6 +32,10 @@ public def OnServerUpdate()
         SetList()
         prevPlayerCount = j
     end
+    CheckCommand()
+end
+
+def CheckCommand()
 end
 
 def BotLog(data)
