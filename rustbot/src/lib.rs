@@ -15,7 +15,7 @@ use serenity::framework::standard::{
 };
 
 #[group]
-#[commands(list, kick)]
+#[commands(list, kick, text, ptext)]
 struct General;
 
 struct Handler;
@@ -23,6 +23,7 @@ struct Handler;
 static mut status: String = String::new();
 static mut log_queue: Vec<String> = Vec::new();
 static mut admin_role: u64 = 0;
+static mut prefix: String = String::new();
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -58,6 +59,8 @@ impl EventHandler for Handler {
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "cdecl" fn start_bot() {
+    println!("Reading \"bot_prefix.txt\"...");
+    prefix = std::fs::read_to_string("bot_prefix.txt").unwrap_or(format!("~"));
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -100,9 +103,9 @@ pub unsafe extern "cdecl" fn player_count(count: i32) {
 }
 
 pub async unsafe fn main(rtoken: &str) {
-    println!("main");
+    let pre = prefix.as_str();
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("~")) // set the bot's prefix to "~"
+        .configure(|c| c.prefix(pre)) // set the bot's prefix to "~"
         .group(&GENERAL_GROUP);
 
     
@@ -127,8 +130,7 @@ async fn list(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-#[command]
-async fn kick(ctx: &Context, msg: &Message) -> CommandResult {
+async fn input_command(name: &str, ctx: &Context, msg: &Message) -> CommandResult {
     let role_id: RoleId;
     unsafe {
         role_id = RoleId(admin_role);
@@ -138,8 +140,12 @@ async fn kick(ctx: &Context, msg: &Message) -> CommandResult {
     if hasrole {
         let index = msg.content.find(" ");
         let mut msg2 = msg.content.clone().to_string();
-        msg2 = msg2.replace("~kick ", "");
-        std::fs::write("bot_game_cmd.txt", format!("kick {}", msg2)).unwrap();
+        let repl: String;
+        unsafe {
+            repl = format!("{0}{1} ", prefix, name);
+        }
+        msg2 = msg2.replace(repl.as_str(), "");
+        std::fs::write("bot_game_cmd.txt", format!("{1} {0}", msg2, name)).unwrap();
         msg.reply(ctx, "Done.").await?;
     }
     else {
@@ -147,4 +153,19 @@ async fn kick(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     Ok(())
+}
+
+#[command]
+async fn kick(ctx: &Context, msg: &Message) -> CommandResult {
+    return input_command("kick", ctx, msg).await;
+}
+
+#[command]
+async fn text(ctx: &Context, msg: &Message) -> CommandResult {
+    return input_command("text", ctx, msg).await;
+}
+
+#[command]
+async fn ptext(ctx: &Context, msg: &Message) -> CommandResult {
+    return input_command("ptext", ctx, msg).await;
 }

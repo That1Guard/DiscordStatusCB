@@ -1,4 +1,5 @@
 #include "includes\multiplayer_core.inc"
+#include "str_util.gs"
 
 global bot = plugin_load("discord_bot.dll")
 plugin_call(bot, "start_bot", 0)
@@ -36,6 +37,43 @@ public def OnServerUpdate()
 end
 
 def CheckCommand()
+    fs = ReadFile("bot_game_cmd.txt")
+    local line = ReadLine(fs)
+    CloseFile(fs)
+    if len line != 0 then
+        fs = WriteFile("bot_game_cmd.txt")
+        CloseFile(fs)
+    end
+    local spl = SplitStr(line, " ")
+    if spl[0] == "kick" then
+            id = Int(spl[1])
+            msg = ""
+            for i=2; i<len spl; i++
+                msg = msg + " " + spl[i]
+            end
+            if IsPlayerConnected(id) then
+                Kick(id, msg)
+            end
+    else if spl[0] == "ptext"
+            id = Int(spl[1])
+            msg = ""
+            for i=2; i<len spl; i++
+                msg = msg + " " + spl[i]
+            end
+            if IsPlayerConnected(id) then
+                SendMessage(id, msg)
+            end
+    else if spl[0] == "text"
+            msg = ""
+            for i=1; i<len spl; i++
+                msg = msg + " " + spl[i]
+            end
+            for i=1; i<=MAX_PLAYERS; ++i
+                if IsPlayerConnected(i) then
+                    SendMessage(i, msg)
+                end
+            end
+    end
 end
 
 def BotLog(data)
@@ -49,7 +87,7 @@ def SetList()
     data = "```\nPlayers:"
     for i=1; i<=MAX_PLAYERS; ++i
         if IsPlayerConnected(i) then
-            data = data + "\n" + GetPlayerNickname(i)
+            data = data + "\n[" + i + "] " + GetPlayerNickname(i)
         end
     end
     data = data + "\n```"
