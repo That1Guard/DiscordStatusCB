@@ -43,6 +43,8 @@ def CheckCommand()
     if len line != 0 then
         fs = WriteFile("bot_game_cmd.txt")
         CloseFile(fs)
+    else
+        return
     end
     local spl = SplitStr(line, " ")
     if spl[0] == "kick" then
