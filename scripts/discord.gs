@@ -10,15 +10,20 @@ end
 global prevPlayerCount = -1
 
 public def OnPlayerConnect(playerid)
-    BotLog("Player " + GetPlayerNickname(playerid) + " join...")
+    DiscBotLog("Player " + GetPlayerNickname(playerid) + " join...")
 end
 
 public def OnPlayerChat(playerid, text)
-    BotLog("Chat: " + GetPlayerNickname(playerid) + text)
+    DiscBotLog("Chat: " + GetPlayerNickname(playerid) + text)
 end
 
 public def OnPlayerDisconnect(playerid, message)
-    BotLog("Player " + GetPlayerNickname(playerid) + " left...")
+    DiscBotLog("Player " + GetPlayerNickname(playerid) + " left...")
+end
+
+public def OnPlayerRconAuthorized(playerid)
+    SetList()
+    DiscBotLog("Player " + GetPlayerNickname(playerid) + " admined...")
 end
 
 public def OnServerUpdate()
@@ -48,37 +53,58 @@ def CheckCommand()
     end
     local spl = SplitStr(line, " ")
     if spl[0] == "kick" then
-            id = Int(spl[1])
-            msg = ""
-            for i=2; i<len spl; i++
-                msg = msg + " " + spl[i]
-            end
-            if IsPlayerConnected(id) then
-                Kick(id, msg)
-            end
+        id = Int(spl[1])
+        msg = ""
+        for i=2; i<len spl; i++
+            msg = msg + " " + spl[i]
+        end
+        if IsPlayerConnected(id) then
+            Kick(id, msg)
+        end
+    else if spl[0] == "ban"
+        id = Int(spl[1])
+        msg = ""
+        for i=2; i<len spl; i++
+            msg = msg + " " + spl[i]
+        end
+        if IsPlayerConnected(id) then
+            ip = GetPlayerIP(id)
+            BanIP(ip)
+        end
     else if spl[0] == "ptext"
-            id = Int(spl[1])
-            msg = ""
-            for i=2; i<len spl; i++
-                msg = msg + " " + spl[i]
-            end
-            if IsPlayerConnected(id) then
-                SendMessage(id, msg)
-            end
+        id = Int(spl[1])
+        msg = ""
+        for i=2; i<len spl; i++
+            msg = msg + " " + spl[i]
+        end
+        if IsPlayerConnected(id) then
+            SendMessage(id, msg)
+        end
     else if spl[0] == "text"
-            msg = ""
-            for i=1; i<len spl; i++
-                msg = msg + " " + spl[i]
+        msg = ""
+        for i=1; i<len spl; i++
+            msg = msg + " " + spl[i]
+        end
+        for i=1; i<=MAX_PLAYERS; ++i
+            if IsPlayerConnected(i) then
+                SendMessage(i, msg)
             end
-            for i=1; i<=MAX_PLAYERS; ++i
-                if IsPlayerConnected(i) then
-                    SendMessage(i, msg)
-                end
+        end
+    else if spl[0] == "admin"
+        id = Int(spl[1])
+        if IsPlayerConnected(id) then
+            if IsPlayerAdmin(id) then
+                RemoveAdmin(id)
+                SetList()
+            else
+                GiveAdmin(id)
+                SetList()
             end
+        end
     end
 end
 
-def BotLog(data)
+def DiscBotLog(data)
     fs = WriteFile("bot_log.txt")
     WriteLine(fs, data)
     CloseFile(fs)
@@ -89,7 +115,11 @@ def SetList()
     data = "```\nPlayers:"
     for i=1; i<=MAX_PLAYERS; ++i
         if IsPlayerConnected(i) then
-            data = data + "\n[" + i + "] " + GetPlayerNickname(i)
+            prefix = "[ ]"
+            if IsPlayerAdmin(i) then
+                prefix = "[X]"
+            end
+            data = data + "\n" + prefix + "[" + i + "] " + GetPlayerNickname(i)
         end
     end
     data = data + "\n```"

@@ -15,7 +15,7 @@ use serenity::framework::standard::{
 };
 
 #[group]
-#[commands(list, kick, text, ptext)]
+#[commands(list, kick, ban, admin, text, ptext)]
 struct General;
 
 struct Handler;
@@ -161,6 +161,11 @@ async fn kick(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+async fn ban(ctx: &Context, msg: &Message) -> CommandResult {
+    return input_command("ban", ctx, msg).await;
+}
+
+#[command]
 async fn text(ctx: &Context, msg: &Message) -> CommandResult {
     return input_command("text", ctx, msg).await;
 }
@@ -168,4 +173,9 @@ async fn text(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 async fn ptext(ctx: &Context, msg: &Message) -> CommandResult {
     return input_command("ptext", ctx, msg).await;
+}
+
+#[command]
+async fn admin(ctx: &Context, msg: &Message) -> CommandResult {
+    return input_command("admin", ctx, msg).await;
 }
