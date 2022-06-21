@@ -1,3 +1,7 @@
+use std::ffi::CStr;
+use std::ffi::CString;
+use std::os::raw::c_char;
+
 use serenity::model::prelude::RoleId;
 use serenity::model::prelude::ChannelId;
 use serenity::model::prelude::Activity;
@@ -76,21 +80,27 @@ pub unsafe extern "cdecl" fn start_bot() {
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "cdecl" fn bot_test() {
+pub unsafe extern "cdecl" fn bot_test(str_ptr: *const c_char) {
     println!("bot_test");
+    let msg = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
+    println!("{}", msg);
+    std::fs::write("bot_test.txt", format!("{0}", msg)).unwrap();
     status = format!("bot_test");
 }
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "cdecl" fn bot_status() {
-    status = std::fs::read_to_string("bot_status.txt").unwrap_or(format!(""));
+pub unsafe extern "cdecl" fn bot_status(str_ptr: *const c_char) {
+    let st = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
+    status = st;
+    // status = std::fs::read_to_string("bot_status.txt").unwrap_or(format!(""));
 }
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "cdecl" fn output_log() {
-    let mut st = std::fs::read_to_string("bot_log.txt").unwrap_or(format!(""));
+pub unsafe extern "cdecl" fn output_log(str_ptr: *const c_char) {
+    // let mut st = std::fs::read_to_string("bot_log.txt").unwrap_or(format!(""));
+    let mut st = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
     st = st.replace("@", " ").replace("\\n", "\n");
     log_queue.push(st);
 }

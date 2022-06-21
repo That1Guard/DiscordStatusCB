@@ -1,16 +1,20 @@
 #include "includes\multiplayer_core.inc"
 #include "str_util.gs"
 
-global bot = plugin_load("discord_bot.dll")
-plugin_call(bot, "start_bot", 0)
-
 public def OnServerStart(port)
+    global bot = plugin_load("discord_bot.dll")
+
+    // plugin_poke(bot, "bot_test complete" + Chr(0), P_TYPE_STRING)
+    // plugin_call(bot, "bot_test", 0)
+
+    plugin_call(bot, "start_bot", 0)
+    DiscBotLog("Server is online...")
 end
 
 global prevPlayerCount = -1
 
 public def OnPlayerConnect(playerid)
-    DiscBotLog("Player " + GetPlayerNickname(playerid) + " join...")
+    DiscBotLog("Player " + GetPlayerNickname(playerid) + " joined...")
 end
 
 public def OnPlayerChat(playerid, text)
@@ -23,7 +27,12 @@ end
 
 public def OnPlayerRconAuthorized(playerid)
     SetList()
-    DiscBotLog("Player " + GetPlayerNickname(playerid) + " admined...")
+    DiscBotLog("Player " + GetPlayerNickname(playerid) + " given admin...")
+end
+
+public def OnPlayerRconIncorrect(playerid)
+    SetList()
+    DiscBotLog("Player " + GetPlayerNickname(playerid) + " not given admin (bad rcon password)...")
 end
 
 public def OnServerUpdate()
@@ -43,6 +52,9 @@ end
 
 def CheckCommand()
     fs = ReadFile("bot_game_cmd.txt")
+    if fs == 0 then
+        return
+    end
     local line = ReadLine(fs)
     CloseFile(fs)
     if len line != 0 then
@@ -51,6 +63,10 @@ def CheckCommand()
     else
         return
     end
+    DiscParseCommand(line)
+end
+
+def DiscParseCommand(line)
     local spl = SplitStr(line, " ")
     if spl[0] == "kick" then
         id = Int(spl[1])
@@ -105,13 +121,16 @@ def CheckCommand()
 end
 
 def DiscBotLog(data)
-    fs = WriteFile("bot_log.txt")
-    WriteLine(fs, data)
-    CloseFile(fs)
+    // fs = WriteFile("bot_log.txt")
+    // WriteLine(fs, data)
+    // CloseFile(fs)
+    // return
+    plugin_poke(bot, data + Chr(0), P_TYPE_STRING)
     plugin_call(bot, "output_log", 0)
 end
 
 def SetList()
+    // return
     data = "```\nPlayers:"
     for i=1; i<=MAX_PLAYERS; ++i
         if IsPlayerConnected(i) then
@@ -129,8 +148,10 @@ def SetList()
 end
 
 def SetStatus(status)
-    fs = WriteFile("bot_status.txt")
-    WriteLine(fs, status)
-    CloseFile(fs)
+    // return
+    // fs = WriteFile("bot_status.txt")
+    // WriteLine(fs, status)
+    // CloseFile(fs)
+    plugin_poke(bot, status + Chr(0), P_TYPE_STRING)
     plugin_call(bot, "bot_status", 0)
 end
