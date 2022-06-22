@@ -28,6 +28,7 @@ static mut status: String = String::new();
 static mut log_queue: Vec<String> = Vec::new();
 static mut admin_role: u64 = 0;
 static mut prefix: String = String::new();
+// static mut log_channel: u64 = 0;
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -48,13 +49,16 @@ impl EventHandler for Handler {
                     let st = &status;
                     _ctx.set_activity(Activity::playing(&*st)).await;
                     if id != 0 {
+                        let mut chat_logs = String::new();
                         for x in &log_queue {
-                            chnl.say(&_ctx.http, &*x).await;
+                            chat_logs += x;
+                            chat_logs += "\n";
                         }
+                        chnl.say(&_ctx.http, &chat_logs).await;
                     }
                     log_queue.clear();
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
             }
         });
     }
@@ -77,6 +81,25 @@ pub unsafe extern "cdecl" fn start_bot() {
             });
     });
 }
+
+/*#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "cdecl" fn bot_update() {
+    let chnl = ChannelId(log_channel);
+    loop {
+        unsafe {
+            let st = &status;
+            _ctx.set_activity(Activity::playing(&*st)).await;
+            if id != 0 {
+                for x in &log_queue {
+                    chnl.say(&_ctx.http, &*x).await;
+                }
+            }
+            log_queue.clear();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    }
+}*/
 
 #[no_mangle]
 #[allow(non_snake_case)]
