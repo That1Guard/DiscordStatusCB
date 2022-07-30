@@ -134,7 +134,7 @@ pub unsafe extern "cdecl" fn bot_status(str_ptr: *const c_char) {
 #[allow(non_snake_case)]
 pub unsafe extern "cdecl" fn output_log(str_ptr: *const c_char) {
     let mut st = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
-    st = st.replace("@", " ").replace("\\n", "\n").replace("~", "").replace("!","").replace(":", "");
+    st = st.replace("@", " ").replace("\\n", "\n");
     log_queue.push(st);
 }
 
@@ -142,7 +142,7 @@ pub unsafe extern "cdecl" fn output_log(str_ptr: *const c_char) {
 #[allow(non_snake_case)]
 pub unsafe extern "cdecl" fn output_admin_log(str_ptr: *const c_char) {
     let mut st = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
-    st = st.replace("@", " ").replace("\\n", "\n").replace("~", "").replace("!","").replace(":", "");
+    st = st.replace("@", " ").replace("\\n", "\n");
     admin_log_queue.push(st);
 }
 
