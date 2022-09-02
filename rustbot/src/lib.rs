@@ -1,5 +1,8 @@
 use std::collections::HashSet;
 use std::ffi::CStr;
+use std::fs::File;
+use std::io::BufReader;
+use std::io::Read;
 use std::os::raw::c_char;
 use serenity::framework::standard::Args;
 use serenity::framework::standard::CommandGroup;
@@ -173,7 +176,13 @@ pub async unsafe fn main(rtoken: &str) {
 #[aliases("online")]
 #[help_available]
 async fn list(ctx: &Context, msg: &Message) -> CommandResult {
-    let mut st = std::fs::read_to_string("Discord/bot_players.txt").unwrap_or(format!(""));
+    let file = File::open("Discord/bot_players.txt")?;
+    let mut reader = BufReader::new(file);
+    let mut buf = Vec::<u8>::new();
+    reader.read_to_end(&mut buf).unwrap();
+    let mut st = String::from(String::from_utf8_lossy(&buf));
+    // let res_fs = std::fs::read_to_string("Discord/bot_players.txt");
+    // let mut st = res_fs.unwrap_or(format!("Error"));
     st = st.replace("@", " ").replace("\\n", "\n").replace("~", "").replace("!","");
     msg.reply(ctx, st).await?;
     Ok(())
