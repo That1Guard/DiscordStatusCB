@@ -1,20 +1,30 @@
+mod commands;
+mod components;
+
+use commands::handler::handle_command;
+use components::handler::handle_component;
+use commands::handler::create_commands;
+
+use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::ffi::CStr;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::Read;
 use std::os::raw::c_char;
-use serenity::framework::standard::Args;
-use serenity::framework::standard::CommandGroup;
+use std::sync::Mutex;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use rustrict::{CensorStr, Type};
+use serenity::model::prelude::interaction::Interaction;
+use serenity::framework::standard::{Args, CommandGroup};
 use serenity::framework::standard::macros::help;
 use serenity::model::id::UserId;
-use serenity::model::prelude::RoleId;
 use serenity::model::prelude::ChannelId;
 use serenity::model::prelude::Activity;
 use serenity::model::prelude::GuildId;
+use serenity::model::application::command::Command;
 use serenity::async_trait;
 use serenity::client::{Client, Context, EventHandler};
-use serenity::model::{channel::Message, gateway::Ready};
+use serenity::model::{channel::Message, gateway::Ready, gateway::GatewayIntents};
+use serenity::http::Http;
 use serenity::framework::standard::{
     help_commands,
     HelpOptions,
@@ -26,48 +36,69 @@ use serenity::framework::standard::{
     }
 };
 
-#[group]
-#[only_in(guilds)]
-#[commands(list, kick, ban, admin, say, psay, restart, stats, unban, steamid)]
-struct General;
+#[group("Hoster")]
+#[owners_only]
+#[commands(upload, emergency_kill, force_exit)]
+struct Hoster;
 
 struct Handler;
 
-static mut status: String = String::new();
-static mut log_queue: Vec<String> = Vec::new();
-static mut admin_log_queue: Vec<String> = Vec::new();
-static mut admin_role: u64 = 0;
-static mut prefix: String = String::new();
+static mut LOG_QUEUE: Vec<String> = Vec::new();
+static mut ADMIN_LOG_QUEUE: Vec<String> = Vec::new();
+static mut ADMIN_ROLE: u64 = 0;
+static mut LEADERBOARD_ROLE: u64 = 0;
+static mut COST_TIME: u64 = 0;
+static mut HEARTBEAT_TIME: u64 = 0;
+
+// TODO: (@That1Guard) Use once_cell since lazy_static is now deprecated
+lazy_static! {
+    static ref PREFIX: Mutex<String> = Mutex::new(String::new());
+    static ref STATUS: Mutex<String> = Mutex::new(String::new());
+}
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn cache_ready(&self, _ctx: Context, _guilds: Vec<GuildId>) {
-        let mut admin_id = std::fs::read_to_string("Discord/bot_admin_role.txt").unwrap_or(format!("0"));
-        admin_id = format!("{}", admin_id.trim());
-        let id = admin_id.parse::<u64>().unwrap();
-        unsafe {
-            admin_role = id;
+    async fn interaction_create(&self, ctx: Context, interactions: Interaction) {
+        match interactions {
+            // std::mem::forget(interactions);
+            Interaction::ApplicationCommand(command) => {
+                // Commands are implemented in src/commands/**/
+                if let Err(why) = handle_command(ctx, command).await {
+                    println!("Slash command failed: {}", why);
+                };
+            },
+            Interaction::MessageComponent(component) => {
+                // Components are implemented in src/components/**/
+                if let Err(why) = handle_component(ctx, component).await {
+                    println!("Message component failed: {}", why);
+                }
+            },
+            _ => println!("Missing an interaction: {}", interactions.kind().num())
         }
-        tokio::spawn(async move {
-            let mut chnl_id = std::fs::read_to_string("Discord/bot_log_channel.txt").unwrap_or(format!("0"));
-            let mut admin_chnl_id = std::fs::read_to_string("Discord/bot_admin_log_channel.txt").unwrap_or(format!("0"));
-            chnl_id = format!("{}", chnl_id.trim());
-            admin_chnl_id = format!("{}", admin_chnl_id.trim());
-            let id = chnl_id.parse::<u64>().unwrap();
-            let adminid = admin_chnl_id.parse::<u64>().unwrap();
-            let chnl = ChannelId(id);
-            let adminchnl = ChannelId(adminid);
-            
+    }
+    async fn cache_ready(&self, _ctx: Context, _guilds: Vec<GuildId>) {
+        let admin_id = std::fs::read_to_string("Discord/bot_admin_role.txt").unwrap_or_default().trim().parse::<u64>().unwrap_or(0);
+        let leaderboard_id = std::fs::read_to_string("Discord/bot_leaderboard_role.txt").unwrap_or_default().trim().parse::<u64>().unwrap_or(0);
+        
+        unsafe {
+            ADMIN_ROLE = admin_id;
+            LEADERBOARD_ROLE = leaderboard_id;
+        }
+
+        let chnl_id = std::fs::read_to_string("Discord/bot_log_channel.txt").unwrap_or_default().trim().parse::<u64>().unwrap_or(0);
+        let admin_chnl_id = std::fs::read_to_string("Discord/bot_admin_log_channel.txt").unwrap_or_default().trim().parse::<u64>().unwrap_or(0);
+
+        let chnl = ChannelId(chnl_id);
+        let adminchnl = ChannelId(admin_chnl_id);
+        tokio::spawn(async move {            
             loop {
                 unsafe {
-                    let st = &status;
-                    _ctx.set_activity(Activity::listening(&*st)).await;
-                    if id != 0 {
+                    let status_clone = STATUS.lock().unwrap().clone();
+                    _ctx.set_activity(Activity::listening(&status_clone)).await;
+                    if chnl != 0 {
                         let mut chat_logs = String::new();
-                        for x in &log_queue {
-                            if x.is_empty() {
-                                continue;
-                            } else {
+                        for x in &LOG_QUEUE {
+                            if !x.is_empty() {
                                 chat_logs += x;
                                 chat_logs += "\n";
                             }
@@ -78,12 +109,12 @@ impl EventHandler for Handler {
                             }
                         }
                     }
-                    if adminid != 0 {
+                    LOG_QUEUE.clear();
+
+                    if adminchnl != 0 {
                         let mut chat_logs = String::new();
-                        for x in &admin_log_queue {
-                            if x.is_empty() {
-                                continue;
-                            } else {
+                        for x in &ADMIN_LOG_QUEUE {
+                            if !x.is_empty() {
                                 chat_logs += x;
                                 chat_logs += "\n";
                             }
@@ -94,25 +125,44 @@ impl EventHandler for Handler {
                             }
                         }
                     }
-                    log_queue.clear();
-                    admin_log_queue.clear();
+                    ADMIN_LOG_QUEUE.clear();
+                    COST_TIME = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                    if HEARTBEAT_TIME != 0 && COST_TIME > HEARTBEAT_TIME + 70  {
+                        // println!("[Discord][DEBUG] Cost Time detected as: {:?} while Heartbeat is {:?}", COST_TIME, HEARTBEAT_TIME);
+                        std::process::exit(0);
+                    }
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
             }
         });
     }
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {        
         println!("[Discord] Bot {} is connected!", ready.user.name);
+
+        Command::set_global_application_commands(&ctx.http, create_commands)
+        .await.expect("Failed to set application commands");
     }
 }
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "cdecl" fn start_bot() {
+pub unsafe extern "cdecl" fn s2d_heartbeat() {
+    HEARTBEAT_TIME = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+}
+
+fn set_prefix(prefix: String) {
+    *PREFIX.lock().unwrap() = prefix;
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "cdecl" fn start_bot() {
     std::fs::create_dir_all("./Discord/").expect("[Discord] Unable to create folder ./Discord/");
     std::fs::create_dir_all("./DataBase/").expect("[Discord] Unable to create folder ./DataBase/");
     println!("[Discord] Reading Bot Prefix...");
-    prefix = std::fs::read_to_string("Discord/bot_prefix.txt").unwrap_or(format!("~"));
+    let prefix = std::fs::read_to_string("Discord/bot_prefix.txt").unwrap_or(format!("~"));
+    set_prefix(prefix);
+    
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -121,190 +171,199 @@ pub unsafe extern "cdecl" fn start_bot() {
             .block_on(async {
                 println!("[Discord] Reading set Bot Token...");
                 let token = std::fs::read_to_string("Discord/bot_token.txt").expect("[Discord] Unable to read bot token!");
-                main(token.trim().as_ref()).await;
+                if let Err(err) = main(token.trim().as_ref()).await {
+                    eprintln!("[Discord] An error occurred during execution: {}", err);
+                }
             });
     });
 }
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "cdecl" fn bot_status(str_ptr: *const c_char) {
-    let st = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
-    status = st;
+pub extern "cdecl" fn isTextCensorable(str_ptr: *const c_char) -> i32 {
+
+    // Safety: Ensure the input pointer is valid and not null.
+    if str_ptr.is_null() {
+        return 0;
+    }
+
+    // Safety: Convert the input C string to Rust String.
+    let cstr = unsafe { CStr::from_ptr(str_ptr) };
+    let st = match cstr.to_str() {
+        Ok(s) => s.to_lowercase(),
+        Err(_) => return 0, // Return 0 if the C string is not valid UTF-8.
+    };
+
+    let shouldCensor = st.is(Type::SEVERE) && st.isnt(Type::SPAM); // Predefine the `rustric` word filter
+    
+    // Convert the boolean result to i32
+    if shouldCensor {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "cdecl" fn bot_status(str_ptr: *const c_char) {
+
+    // Safety: Ensure the input pointer is valid and not null.
+    if str_ptr.is_null() {
+        return;
+    }
+
+    // Safety: Convert the input C string to Rust String.
+    let cstr = unsafe { CStr::from_ptr(str_ptr) };
+    let st = match cstr.to_str() {
+        Ok(s) => s.to_owned(),
+        Err(_) => return, // Return early if the C string is not valid UTF-8.
+    };
+    STATUS.lock().unwrap().clear();
+    STATUS.lock().unwrap().push_str(&st);
 }
 
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "cdecl" fn output_log(str_ptr: *const c_char) {
     let mut st = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
-    st = st.replace("@", " ").replace("\\n", "\n");
-    log_queue.push(st);
+    st = st.replace("@", " ").replace("\\n", "\n").replace("~", "").replace("!","").replace(":", "");
+    LOG_QUEUE.push(st);
 }
 
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "cdecl" fn output_admin_log(str_ptr: *const c_char) {
     let mut st = CStr::from_ptr(str_ptr).to_string_lossy().into_owned();
-    st = st.replace("@", " ").replace("\\n", "\n");
-    admin_log_queue.push(st);
+    st = st.replace("@", " ").replace("\\n", "\n").replace("~", "").replace("!","").replace(":", "");
+    ADMIN_LOG_QUEUE.push(st);
 }
 
-pub async unsafe fn main(rtoken: &str) {
-    log_panics::init();
-    let pre = prefix.as_str();
-    let framework = StandardFramework::new()
-        .configure(|c| c.prefix(pre)) // set the bot's prefix to "~"
-        .help(&MY_HELP)
-        .group(&GENERAL_GROUP);
+pub async fn main(rtoken: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let http = Http::new(&rtoken);
+    let owner = match http.get_current_application_info().await {
+        Ok(info) => info.owner.id,
+        Err(err) => return Err(format!("Failed to get application info: {}", err).into()),
+    };
 
+    let mut owners = HashSet::new();
+    owners.insert(owner);
     
-    let mut client = Client::builder(rtoken)
+    let framework = StandardFramework::new()
+    .configure(|configuration| {
+        configuration
+            .prefix(&*PREFIX.lock().unwrap())
+            .ignore_webhooks(false)
+            .ignore_bots(true)
+            .no_dm_prefix(true)
+            .with_whitespace(true)
+            .owners(owners)
+            .case_insensitivity(true)
+    })
+    .help(&MY_HELP)
+    .group(&HOSTER_GROUP);
+    
+    // Set intents, which we only want non-privileged anyways. TODO: Restrict intents to only what we need.
+    let intents = GatewayIntents::non_privileged();
+    
+    println!("[Discord] Starting client.");
+    
+    let mut client = Client::builder(rtoken, intents)
         .event_handler(Handler)
         .framework(framework)
+        // Apparently we can still define intent after we already passed intent required beforehand anyways.
+        // What? Lol.
+        // .intents(intents)
         .await
-        .expect("[Discord] Error creating client");
-
-    // start listening for events by starting a single shard
+        .map_err(|err| format!("[Discord] Error creating client: {}", err))?;
+    
+    // Start listening for events by starting a single shard
     if let Err(why) = client.start().await {
         println!("[Discord] An error occurred while running the client: {:?}", why);
+        return Err(why.into());
     }
-}
 
-#[command]
-#[num_args(0)]
-#[description = "Lists all users available on the server at the current time."]
-#[aliases("online")]
-#[help_available]
-async fn list(ctx: &Context, msg: &Message) -> CommandResult {
-    let file = File::open("Discord/bot_players.txt")?;
-    let mut reader = BufReader::new(file);
-    let mut buf = Vec::<u8>::new();
-    reader.read_to_end(&mut buf).unwrap();
-    let mut st = String::from(String::from_utf8_lossy(&buf));
-    // let res_fs = std::fs::read_to_string("Discord/bot_players.txt");
-    // let mut st = res_fs.unwrap_or(format!("Error"));
-    st = st.replace("@", " ").replace("\\n", "\n").replace("~", "").replace("!","");
-    msg.reply(ctx, st).await?;
     Ok(())
 }
 
-async fn input_command(name: &str, ctx: &Context, msg: &Message) -> CommandResult {
-    let role_id: RoleId;
-    unsafe {
-        role_id = RoleId(admin_role);
+#[command]
+#[owners_only]
+#[description = "Manipulates the server to think into closing itself with a valid exit."]
+#[help_available]
+async fn force_exit(_ctx: &Context, _msg: &Message) -> CommandResult {
+    std::process::exit(0);
+}
+
+#[command]
+#[owners_only]
+#[description = "Will kill the server if normal killing is impossible, but can result in SEGFAULT. \n
+WARNING: Do not use unless necessary or security concerns prokes this."]
+#[help_available]
+async fn emergency_kill(_ctx: &Context,_msgg: &Message) -> CommandResult {
+    std::process::abort();
+}
+
+#[command]
+#[owners_only]
+//#[only_in(dms)]
+#[description = "Upload a script a that will replace the current discord.gs or provide other supplementary .gsc scripts'."]
+#[help_available]
+async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
+    println!(
+        "[Discord] Received upload command from {}#{}",
+        msg.author.name, msg.author.discriminator
+    );
+
+    if msg.attachments.is_empty() {
+        msg.channel_id
+            .say(&ctx.http, "Attachment required for this command.")
+            .await?;
+        return Ok(());
     }
-    let guild = msg.guild_id.unwrap();
-    let hasrole = msg.author.has_role(ctx, guild, role_id).await.unwrap();
-    if hasrole {
-        let index = msg.content.find(" ");
-        let mut msg2 = msg.content.clone().to_string();
-        let repl: String;
-        unsafe {
-            repl = format!("{0}{1} ", prefix, name);
+
+    for attachment in &msg.attachments {
+        if attachment.size < 1 || !attachment.filename.contains(".gsc") {
+            msg.channel_id
+                .say(
+                    &ctx.http,
+                    "Attachment contained no bytes to download or did not have the .gsc extension.",
+                )
+                .await?;
+            continue;
         }
-        msg2 = msg2.replace(repl.as_str(), "");
-        std::fs::write("Discord/bot_game_cmd.txt", format!("{1} {0}", msg2, name)).unwrap();
-        msg.reply(ctx, "Running...").await?;
-    }
-    else {
-        msg.reply(ctx, "No permission.").await?;
+
+        let content = match attachment.download().await {
+            Ok(content) => content,
+            Err(why) => {
+                println!("[Discord] Error downloading attachment: {:?}", why);
+                msg.channel_id
+                    .say(&ctx.http, "Error downloading attachment.")
+                    .await?;
+                continue;
+            }
+        };
+
+        match tokio::fs::write(&attachment.filename, content).await {
+            Ok(_) => {
+                msg.channel_id
+                    .say(&ctx.http, &format!("Saved {:?}", attachment.filename))
+                    .await?;
+                println!(
+                    "[Discord] Done downloading/updating script: {:?}.",
+                    attachment.filename
+                );
+            }
+            Err(why) => {
+                println!("[Discord] Error writing file: {:?}", why);
+                msg.channel_id
+                    .say(&ctx.http, "Error writing file.")
+                    .await?;
+            }
+        }
     }
 
     Ok(())
 }
-
-#[command]
-#[num_args(1)]
-#[description = "Kicks user from SCP:CB Server. Arguements: ID"]
-#[example = "3"]
-#[help_available]
-async fn kick(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("kick", ctx, msg).await;
-}
-
-#[command]
-#[description = "Bans user from SCP:CB Server. Arguements: BANTYPE, ID, MINUTES"]
-#[num_args(3)]
-#[example = "steamid 294563211 5"]
-#[example = "pid 8 5"]
-#[help_available]
-async fn ban(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("ban", ctx, msg).await;
-}
-
-#[command]
-#[min_args(1)]
-#[description = "Sends a global message to the SCP Server chat, appearing in their in-game chat. Arguements: [STRING]"]
-#[aliases("say")]
-#[example = "Hello everyone."]
-#[help_available]
-async fn say(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("say", ctx, msg).await;
-}
-
-#[command]
-#[min_args(1)]
-#[description = "Sends a private message to specific user, appearing in their in-game chat. Arguements: [STRING]"]
-#[aliases("psay")]
-#[example = "1 Hello random username1."]
-#[help_available]
-async fn psay(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("psay", ctx, msg).await;
-}
-
-#[command]
-#[num_args(1)]
-#[description = "Toggle admin privileges for a specific user. Arguements: ID"]
-#[example = "1"]
-#[help_available]
-#[aliases("toggleadmin", "ta")]
-async fn admin(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("admin", ctx, msg).await;
-}
-
-#[command]
-#[num_args(1)]
-#[description = "Show stats of a specific user logged in by ID. ID's obtainable using `list` command. Arguements: ID"]
-#[example = "1"]
-#[help_available]
-#[aliases("stat")]
-async fn stats(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("stats", ctx, msg).await;
-}
-
-#[command]
-#[num_args(1)]
-#[description = "Unban player from SCPCB and allows them to join. Arguements: SteamID"]
-#[example = "1280464321"]
-#[help_available]
-async fn unban(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("unban", ctx, msg).await;
-}
-
-#[command]
-#[num_args(1)]
-#[description = "Lookup SteamID from connected PlayerID. Arguements: PlayerID"]
-#[example = "6"]
-#[help_available]
-async fn steamid(ctx: &Context, msg: &Message) -> CommandResult {
-    return input_command("steamid", ctx, msg).await;
-}
-
-#[command]
-#[num_args(1)]
-#[description = "Forcefully restarts the SCP:CB server. Arguements: STRING"]
-#[example = "confirm"]
-#[help_available]
-async fn restart(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let _response = args.rest();
-    if _response == "confirm" {
-        msg.channel_id.say(&ctx.http, "Please wait while server restarts...").await?;
-        return input_command("restart", ctx, msg).await;
-    } 
-    msg.channel_id.say(&ctx.http, "Either no permission or invalid arguement detected.").await?;
-    Ok(())
-}
-
 
 #[help]
 #[individual_command_tip = "SCP:CB Multiplayer Bot Help Page\n\n
