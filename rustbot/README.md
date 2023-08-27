@@ -70,4 +70,4 @@ The Rustbot utilizes libraries like Serenity, Rustric, and Rust's other capabili
 
 ## License
 
-This project is licensed under the [MIT License](../../LICENSE).
+This project is licensed under the [MIT License](../LICENSE).
