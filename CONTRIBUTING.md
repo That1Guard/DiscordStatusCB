@@ -33,4 +33,4 @@ If you're unsure about something, have questions, or just want to chat, feel fre
 
 By contributing to this project, you agree that your contributions will be licensed under the [MIT License](LICENSE).
 
-Thank you for being a part of our pet project community!
+Thank you for being a part of our projects community!

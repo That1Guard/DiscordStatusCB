@@ -12,7 +12,7 @@ The `scripts/koradox-wendybreach` folder contains scripts related to the **Korad
 
 ### Original DiscordStatusCB Project: `scripts/original_script`
 
-The `scripts/original_script` directory holds the original DiscordStatusCB project. While it's no longer actively maintained, you can explore its content via the [original DiscordStatusCB Repository README](scripts\original_script\README.md).
+The `scripts/original_script` directory holds the original DiscordStatusCB project. While it's no longer actively maintained, you can explore its content via the [original DiscordStatusCB Repository README](scripts/original_script/README.md).
 
 ### Rustbot Project: `rustbot`
 
