@@ -227,12 +227,16 @@ public def OnServerRestart(playerid)
 end
 
 public def OnPlayerRconAuthorized(playerid)
-    SetList()
-    DiscBotAdminLog("[RCON] Player " + GetPlayerNickname(playerid) + " [" + GetPlayerSteamID(playerid) + "] has admined...")
+    if discordbot
+        SetList()
+        DiscBotAdminLog("[RCON] Player " + GetPlayerNickname(playerid) + " [" + GetPlayerSteamID(playerid) + "] has admined...")
+    end
 end
 
 public def OnPlayerRconIncorrect(playerid)
-    DiscBotAdminLog("[RCON] Player " + GetPlayerNickname(playerid) + " has failed to admined...")
+    if discordbot
+        DiscBotAdminLog("[RCON] Player " + GetPlayerNickname(playerid) + " has failed to admined...")
+    end
 end
 
 public def OnPlayerConsole(playerid, text, isadmin)

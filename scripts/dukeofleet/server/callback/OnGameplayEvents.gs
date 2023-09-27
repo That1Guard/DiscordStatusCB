@@ -68,3 +68,20 @@ public def OnSpawnMTF()
     commandInUse = 1
     CreateTimer("commandnotinuse", 30000, 0)
 end
+
+public def OnCreateNPC(npcid)
+    local npcType = GetNPCType(npcid)
+    local npcEvent = GetNPCEvent(npcid)
+    print("[DEBUG][OnCreateNPC] NPC created ID: " + npcid + ", Type: " + npcType + ", NpcEvent:" + npcEvent)
+    
+    select npcType
+        case 3, 8
+            local npcEntity = GetNPCEntity(npcid)
+            print("Cancelled NPC ID:" + npcid)
+            // TODO (@That1Guard) Move npc to 0,0,0
+    end
+end
+
+public def OnPlayerRequestNoTarget(playerid)
+    print("[DEBUG][OnPlayerRequestNoTarget] PlayerID: " + playerid)
+end

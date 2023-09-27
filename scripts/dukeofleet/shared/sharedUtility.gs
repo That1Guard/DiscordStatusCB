@@ -112,9 +112,9 @@ end
 // Returns:
 // - any: Either 'trueValue' or 'falseValue' based on the evaluation of 'condition'.
 def IfCondition(condition, trueValue, falseValue)
-    if varBool > 0
-        return  elseVar
+    if condition > 0
+        return  trueValue
     else
-        return defaultVar
+        return falseValue
     end
 end

@@ -22,7 +22,11 @@ public def spawnMtfChaosUnits()
             local playerTypeSpawnCallback = GetPlayerType(i)                
             if playerTypeSpawnCallback == 0
                 foundDead++
-                SetPlayerType(i,1)
+                if foundDead % 2 == 0
+                    SetPlayerType(i,7)
+                else
+                    SetPlayerType(i,1)
+                end
                 playersJustSpawned[i] = 1
             else
                 playersJustSpawned[i] = 0

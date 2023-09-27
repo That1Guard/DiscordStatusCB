@@ -149,11 +149,3 @@ public def OnScriptLoaded()
     // Print successful connection message
     print("[" + gettime() + "] [MYSQL] Successfully connected to MySQL [STATUS: " + MysqlConnection + "]")
 end
-
-public def OnCreateNPC(npcid)
-    print("[DEBUG][OnCreateNPC] NPC created ID: " + npcid + ", Type: " + GetNPCType(npcid))
-end
-
-public def OnPlayerRequestNoTarget(playerid)
-    print("[DEBUG][OnPlayerRequestNoTarget] PlayerID: " + playerid)
-end
